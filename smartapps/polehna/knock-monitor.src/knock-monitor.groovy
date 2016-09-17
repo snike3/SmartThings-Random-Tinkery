@@ -39,8 +39,10 @@ preferences {
         	required: true, defaultValue: 13000
 	}
 	section("Monitor the status of this door:"){
-		input "door", "capability.contactSensor", title: "Door?", required: true
+		input "door", "capability.contactSensor", title: "Open/Close Sensor?", required: true
 		input "openDelay", "decimal", title: "Time after knock (in seconds)", required: false, defaultValue: 5
+        input "lock", "capability.lock", title: "Lock? (Optional)", required: false,
+        	description: "Filter out any false positives due to the lock mechanism vibrations."
 	}
 	section("Notifications"){
     	input "toPush", "bool", title: "Send push notification?", required: false, defaultValue: true
@@ -69,9 +71,27 @@ def initialize() {
 def accelerationActiveHandler(evt) {
 	log.trace "vibration"
 	if (!state.isRunning) {
-		log.info "Arming detector"
-		state.isRunning = true
-		state.startedAt = now()
+    	def proceed = true
+        
+    	if (lock) {
+        	def lockChanges = lock.eventsSince(new Date(now() - 1000))
+            
+            if (lockChanges) {
+                if (lockChanges.find(it.value == "lock")) {
+                    log.debug "Door was locked, ignoring vibration"
+                    proceed = false
+                } else if (lockChanges.find(it.value == "unlock")) {
+                    log.debug "Door was unlocked, ignoring vibration"
+                    proceed = false
+                }
+        	}
+        }
+        
+        if (proceed) {
+            log.info "Arming detector"
+            state.isRunning = true
+            state.startedAt = now()
+        }
 	}
 	state.stoppedAt = null
     
